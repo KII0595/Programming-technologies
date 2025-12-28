@@ -1,338 +1,250 @@
 from abc import ABC, abstractmethod
-from typing import List, Dict, Optional, Any
+from typing import Any, Dict, List, Optional
 
 
-# Валидаторы и стратегии (стиль Куйбышева — лаконичный)
-class Validator(ABC):
+class BaseValidator(ABC):
     @abstractmethod
     def validate(self, value: Any) -> Any:
         pass
 
 
-class PositiveNumberValidator(Validator):
+class NonNegativeFloatValidator(BaseValidator):
     def validate(self, value: Any) -> float:
         num = float(value)
         if num < 0:
-            raise ValueError("число должно быть >0")
+            raise ValueError("Значение должно быть неотрицательным")
         return num
 
 
-class StringNotEmptyValidator(Validator):
+class NonEmptyStringValidator(BaseValidator):
     def validate(self, value: Any) -> str:
-        if not value or not str(value).strip():
-            raise ValueError("строка не может быть пустой")
-        return str(value).strip()
+        s = str(value).strip()
+        if not s:
+            raise ValueError("Строка не может быть пустой")
+        return s
 
 
-class SalaryStrategy(ABC):
+class PayrollStrategy(ABC):
     @abstractmethod
-    def calculate(self, **kwargs) -> float:
+    def compute(self, base: float, **params) -> float:
         pass
 
 
-class DeveloperSalaryStrategy(SalaryStrategy):
-    MULTIPLIERS = {"junior": 1.0, "middle": 1.5, "senior": 2.0}
+class DevPayrollStrategy(PayrollStrategy):
+    LEVEL_MULTIPLIERS = {"junior": 1.0, "middle": 1.5, "senior": 2.0}
 
-    def calculate(self, base_salary: float, seniority: str = "junior", **kwargs) -> float:
-        return base_salary * self.MULTIPLIERS.get(seniority, 1.0)
-
-
-class ManagerSalaryStrategy(SalaryStrategy):
-    def calculate(self, base_salary: float, bonus: float = 0, **kwargs) -> float:
-        return base_salary + bonus
+    def compute(self, base: float, level: str = "junior", **_) -> float:
+        return base * self.LEVEL_MULTIPLIERS.get(level.lower(), 1.0)
 
 
-class SalespersonSalaryStrategy(SalaryStrategy):
-    def calculate(self, base_salary: float, commission_rate: float = 0.1,
-                  total_sales: float = 0, **kwargs) -> float:
-        return base_salary + total_sales * commission_rate
+class ManagerPayrollStrategy(PayrollStrategy):
+    def compute(self, base: float, fixed_bonus: float = 0.0, **_) -> float:
+        return base + fixed_bonus
 
 
-class BonusStrategy(ABC):
+class SalesPayrollStrategy(PayrollStrategy):
+    def compute(self, base: float, rate: float = 0.1, sales_volume: float = 0.0, **_) -> float:
+        return base + sales_volume * rate
+
+
+class BonusPolicy(ABC):
     @abstractmethod
-    def calculate_bonus(self, base_salary: float, **kwargs) -> float:
+    def compute_bonus(self, base: float, **params) -> float:
         pass
 
 
-class PerformanceBonusStrategy(BonusStrategy):
-    def calculate_bonus(self, base_salary: float, **kwargs) -> float:
-        return base_salary * 0.1
+class FixedPerformanceBonus(BonusPolicy):
+    def compute_bonus(self, base: float, **_) -> float:
+        return base * 0.10
 
 
-class SeniorityBonusStrategy(BonusStrategy):
-    RATES = {"junior": 0.05, "middle": 0.10, "senior": 0.20}
+class LevelBasedBonus(BonusPolicy):
+    BONUS_RATES = {"junior": 0.05, "middle": 0.10, "senior": 0.20}
 
-    def calculate_bonus(self, base_salary: float, seniority: str = "junior", **kwargs) -> float:
-        return base_salary * self.RATES.get(seniority, 0.05)
+    def compute_bonus(self, base: float, level: str = "junior", **_) -> float:
+        return base * self.BONUS_RATES.get(level.lower(), 0.05)
 
 
-# Интерфейсы
-class ISalaryCalculable(ABC):
+class StaffMember(ABC):
     @abstractmethod
-    def calculate_salary(self) -> float: ...
+    def full_salary(self) -> float: ...
 
-
-class IInfoProvidable(ABC):
     @abstractmethod
-    def get_info(self) -> str: ...
+    def info(self) -> str: ...
 
-
-class ISerializable(ABC):
     @abstractmethod
-    def to_dict(self) -> Dict[str, Any]: ...
+    def as_dict(self) -> Dict[str, Any]: ...
 
 
-# Базовый сотрудник
-class Employee(ISalaryCalculable, IInfoProvidable, ISerializable):
+class Employee(StaffMember):
     def __init__(
         self,
         name: str,
-        department: str,
-        base_salary: float,
-        employee_id: int = 0,
-        salary_strategy: Optional[SalaryStrategy] = None,
-        bonus_strategy: Optional[BonusStrategy] = None,
+        dept: str,
+        base_pay: float,
+        emp_id: int = 0,
+        payroll: Optional[PayrollStrategy] = None,
+        bonus: Optional[BonusPolicy] = None,
     ):
-        self.__name = StringNotEmptyValidator().validate(name)
-        self.__department = department
-        self.__base_salary = PositiveNumberValidator().validate(base_salary)
-        self.__id = employee_id
-        self._salary_strategy = salary_strategy or DeveloperSalaryStrategy()
-        self._bonus_strategy = bonus_strategy or PerformanceBonusStrategy()
+        self._name = NonEmptyStringValidator().validate(name)
+        self._dept = dept
+        self._base = NonNegativeFloatValidator().validate(base_pay)
+        self._id = emp_id
+        self._payroll = payroll or DevPayrollStrategy()
+        self._bonus = bonus or FixedPerformanceBonus()
 
     @property
-    def id(self) -> int:
-        return self.__id
+    def emp_id(self) -> int:
+        return self._id
 
     @property
     def name(self) -> str:
-        return self.__name
+        return self._name
 
-    @property
-    def base_salary(self) -> float:
-        return self.__base_salary
+    def full_salary(self) -> float:
+        return self._payroll.compute(self._base) + self._bonus.compute_bonus(self._base)
 
-    def calculate_salary(self) -> float:
-        base = self._salary_strategy.calculate(base_salary=self.__base_salary)
-        bonus = self._bonus_strategy.calculate_bonus(base_salary=self.__base_salary)
-        return base + bonus
+    def info(self) -> str:
+        return f"{self._name} (ID: {self._id}) – ${self.full_salary():.2f}"
 
-    def get_info(self) -> str:
-        return f"{self.name} (ID: {self.__id}) - ${self.calculate_salary():.2f}"
-
-    def to_dict(self) -> Dict[str, Any]:
+    def as_dict(self) -> Dict[str, Any]:
         return {
-            "id": self.__id,
-            "name": self.__name,
-            "department": self.__department,
-            "base_salary": self.__base_salary,
-            "total_salary": self.calculate_salary(),
+            "id": self._id,
+            "name": self._name,
+            "department": self._dept,
+            "base": self._base,
+            "total": self.full_salary(),
         }
 
-    # Добавлено "другим студентом" для удобной отладки
-    def __repr__(self) -> str:
-        return f"<Employee {self.name} salary=${self.calculate_salary():.2f}>"
 
-
-# Конкретные типы сотрудников
 class Developer(Employee):
-    def __init__(
-        self,
-        name: str,
-        department: str,
-        base_salary: float,
-        seniority: str = "junior",
-        skills: Optional[List[str]] = None,
-        employee_id: int = 0,
-    ):
-        self.__seniority = seniority
-        self.__skills: List[str] = skills or []
+    def __init__(self, name: str, dept: str, base_pay: float, level: str = "junior", skills: Optional[List[str]] = None, emp_id: int = 0):
+        self._level = level.lower()
+        self._skills = skills or []
         super().__init__(
             name=name,
-            department=department,
-            base_salary=base_salary,
-            employee_id=employee_id,
-            salary_strategy=DeveloperSalaryStrategy(),
-            bonus_strategy=SeniorityBonusStrategy(),
+            dept=dept,
+            base_pay=base_pay,
+            emp_id=emp_id,
+            payroll=DevPayrollStrategy(),
+            bonus=LevelBasedBonus(),
         )
 
-    def calculate_salary(self) -> float:
+    def full_salary(self) -> float:
         return (
-            self._salary_strategy.calculate(base_salary=self.base_salary, seniority=self.__seniority)
-            + self._bonus_strategy.calculate_bonus(base_salary=self.base_salary, seniority=self.__seniority)
+            self._payroll.compute(self._base, level=self._level)
+            + self._bonus.compute_bonus(self._base, level=self._level)
         )
 
 
 class Manager(Employee):
-    def __init__(
-        self,
-        name: str,
-        department: str,
-        base_salary: float,
-        bonus: float = 0,
-        employee_id: int = 0,
-    ):
-        self.__bonus = bonus
+    def __init__(self, name: str, dept: str, base_pay: float, fixed_bonus: float = 0.0, emp_id: int = 0):
+        self._fixed_bonus = fixed_bonus
         super().__init__(
             name=name,
-            department=department,
-            base_salary=base_salary,
-            employee_id=employee_id,
-            salary_strategy=ManagerSalaryStrategy(),
-            bonus_strategy=PerformanceBonusStrategy(),
+            dept=dept,
+            base_pay=base_pay,
+            emp_id=emp_id,
+            payroll=ManagerPayrollStrategy(),
+            bonus=FixedPerformanceBonus(),
         )
 
-    def calculate_salary(self) -> float:
+    def full_salary(self) -> float:
         return (
-            self._salary_strategy.calculate(base_salary=self.base_salary, bonus=self.__bonus)
-            + self._bonus_strategy.calculate_bonus(base_salary=self.base_salary)
+            self._payroll.compute(self._base, fixed_bonus=self._fixed_bonus)
+            + self._bonus.compute_bonus(self._base)
         )
 
 
-class Salesperson(Employee):
-    def __init__(
-        self,
-        name: str,
-        department: str,
-        base_salary: float,
-        commission_rate: float = 0.1,
-        employee_id: int = 0,
-    ):
-        self.__commission_rate = commission_rate
-        self.__total_sales = 0.0
+class SalesPerson(Employee):
+    def __init__(self, name: str, dept: str, base_pay: float, commission: float = 0.1, emp_id: int = 0):
+        self._commission = commission
+        self._sales_volume = 0.0
         super().__init__(
             name=name,
-            department=department,
-            base_salary=base_salary,
-            employee_id=employee_id,
-            salary_strategy=SalespersonSalaryStrategy(),
+            dept=dept,
+            base_pay=base_pay,
+            emp_id=emp_id,
+            payroll=SalesPayrollStrategy(),
         )
 
-    def add_sales(self, amount: float) -> None:
-        self.__total_sales += PositiveNumberValidator().validate(amount)
+    def record_sale(self, amount: float) -> None:
+        self._sales_volume += NonNegativeFloatValidator().validate(amount)
 
-    @property
-    def total_sales(self) -> float:  # Стиль другого студента — открытый геттер
-        return self.__total_sales
-
-    def calculate_salary(self) -> float:
-        return self._salary_strategy.calculate(
-            base_salary=self.base_salary,
-            commission_rate=self.__commission_rate,
-            total_sales=self.__total_sales,
+    def full_salary(self) -> float:
+        return self._payroll.compute(
+            self._base, rate=self._commission, sales_volume=self._sales_volume
         )
 
 
-# === Factory — явно "чужой" вклад ===
-class EmployeeFactory:
-    """Фабрика для удобного создания сотрудников (предложена одногруппником)"""
-
-    @staticmethod
-    def create_developer(
-        name: str,
-        department: str,
-        base_salary: float,
-        seniority: str = "junior",
-        skills: Optional[List[str]] = None,
-    ) -> Developer:
-        return Developer(name, department, base_salary, seniority, skills)
-
-    @staticmethod
-    def create_manager(name: str, department: str, base_salary: float, bonus: float = 0) -> Manager:
-        return Manager(name, department, base_salary, bonus)
-
-    @staticmethod
-    def create_salesperson(
-        name: str, department: str, base_salary: float, commission_rate: float = 0.1
-    ) -> Salesperson:
-        return Salesperson(name, department, base_salary, commission_rate)
-
-
-# Repository с автогенерацией ID (улучшение от "другого студента")
-class IEmployeeRepository(ABC):
+class EmployeeStorage(ABC):
     @abstractmethod
-    def add(self, employee: Employee) -> None: ...
+    def save(self, emp: Employee) -> None: ...
 
     @abstractmethod
-    def get_all(self) -> List[Employee]: ...
+    def list_all(self) -> List[Employee]: ...
 
 
-class InMemoryEmployeeRepository(IEmployeeRepository):
+class MemoryStorage(EmployeeStorage):
     def __init__(self):
-        self._employees: Dict[int, Employee] = {}
-        self._next_id = 1
+        self._data: Dict[int, Employee] = {}
+        self._counter = 1
 
-    def add(self, employee: Employee) -> None:
-        if employee.id == 0:
-            # Прямой доступ к приватному полю — типичный "чужой" стиль
-            employee._Employee__id = self._next_id
-            self._employees[self._next_id] = employee
-            self._next_id += 1
+    def save(self, emp: Employee) -> None:
+        if emp.emp_id == 0:
+            emp._id = self._counter
+            self._data[self._counter] = emp
+            self._counter += 1
         else:
-            self._employees[employee.id] = employee
+            self._data[emp.emp_id] = emp
 
-    def get_all(self) -> List[Employee]:
-        return list(self._employees.values())
-
-
-# Company с дополнительным методом
-class Company:
-    def __init__(self, name: str, repository: Optional[IEmployeeRepository] = None):
-        self.__name = name
-        self.__repository = repository or InMemoryEmployeeRepository()
-
-    def hire_employee(self, employee: Employee) -> None:
-        self.__repository.add(employee)
-
-    def get_all_employees(self) -> List[Employee]:
-        return self.__repository.get_all()
-
-    def calculate_total_salary(self) -> float:
-        return sum(emp.calculate_salary() for emp in self.__repository.get_all())
-
-    def get_average_salary(self) -> float:  # Добавлено "другим студентом"
-        employees = self.__repository.get_all()
-        return self.calculate_total_salary() / len(employees) if employees else 0.0
-
-    def get_employee_count(self) -> int:
-        return len(self.__repository.get_all())
+    def list_all(self) -> List[Employee]:
+        return list(self._data.values())
 
 
-# Demo — смешанный стиль, использует Factory и новые имена
-def main():
-    print("demo processing...")
+class Organization:
+    def __init__(self, title: str, storage: Optional[EmployeeStorage] = None):
+        self._title = title
+        self._storage = storage or MemoryStorage()
 
-    dev = EmployeeFactory.create_developer(
-        name="Alice Smith",
-        department="DEV",
-        base_salary=5000,
-        seniority="senior",
-        skills=["Python", "Docker"],
-    )
-    manager = EmployeeFactory.create_manager(
-        name="Bob Johnson", department="MGMT", base_salary=8000, bonus=2000
-    )
-    salesperson = EmployeeFactory.create_salesperson(
-        name="Charlie Brown", department="SALES", base_salary=3000, commission_rate=0.15
-    )
+    def add_employee(self, emp: Employee) -> None:
+        self._storage.save(emp)
 
-    company = Company("TechCorp")
-    company.hire_employee(dev)
-    company.hire_employee(manager)
-    company.hire_employee(salesperson)
-    salesperson.add_sales(5000)
+    def employees(self) -> List[Employee]:
+        return self._storage.list_all()
 
-    print("\n1. Сотрудники:")
-    for emp in company.get_all_employees():
-        print(f"- {emp.get_info()}")
+    def total_payroll(self) -> float:
+        return sum(e.full_salary() for e in self._storage.list_all())
 
-    print("\n2. Статистика компании:")
-    print(f"- Всего сотрудников: {company.get_employee_count()}")
-    print(f"- Общая зарплата: ${company.calculate_total_salary():.2f}")
-    print(f"- Средняя зарплата: ${company.get_average_salary():.2f}")
+    def headcount(self) -> int:
+        return len(self._storage.list_all())
 
-    print("demo end")
+
+def demo() -> None:
+    print("Запуск демонстрации...\n")
+    print("Список сотрудников:")
+    
+    dev = Developer("Максим Кузнецов", "Разработка", 5000, "senior", ["Python", "FastAPI"])
+    mgr = Manager("Ольга Иванова", "Управление", 8000, 2000)
+    sales = SalesPerson("Сергей Петров", "Продажи", 3000, 0.15)
+
+    org = Organization("InnoTech")
+    org.add_employee(dev)
+    org.add_employee(mgr)
+    org.add_employee(sales)
+    sales.record_sale(5000)
+
+    for e in org.employees():
+        print(f"- {e.info()}")
+
+    print("\nОбщая статистика:")
+    print(f"Количество сотрудников: {org.headcount()}")
+    print(f"Фонд заработной платы: ${org.total_payroll():.2f}")
+    avg = org.total_payroll() / org.headcount() if org.headcount() else 0
+    print(f"Средняя зарплата: ${avg:.2f}")
+
+    print("\nДемонстрация завершена")
 
 
 if __name__ == "__main__":
-    main()
+    demo()
