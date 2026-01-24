@@ -34,35 +34,168 @@ lab7-go-concurrency/
 - Fan-Out/Fan-In для распределённой обработки
 - HTTP-сервер с логированием запросов, восстановлением после паники и graceful shutdown
 
-### Примеры работы
+## Реализация и примеры кода
 
-**Атомарный счётчик и параллельное выполнение**
+### Пример 1. Базовая горутина
 
 ```go
-counter := atomic.Uint64{}
-var wg sync.WaitGroup
-for i := 0; i < 500; i++ {
-    wg.Add(1)
-    go func() {
-        defer wg.Done()
-        for j := 0; j < 20; j++ {
-            counter.Add(1)
-        }
-    }()
+package main
+
+import (
+    "fmt"
+    "sync"
+)
+
+func main() {
+    var wg sync.WaitGroup
+
+    for i := 1; i <= 3; i++ {
+        wg.Add(1)
+        go func(id int) {
+            defer wg.Done()
+            fmt.Printf("Горутина %d работает\n", id)
+        }(i)
+    }
+
+    wg.Wait()
+    fmt.Println("Все горутины завершены")
 }
-wg.Wait()
-fmt.Println("Финальное значение:", counter.Load())
 ```
 
-### Pipeline из нескольких стадий
+**Описание:**
+В данном примере создаются три горутины, которые выполняются параллельно. WaitGroup используется для ожидания их завершения.
+
+
+### Пример 2. Каналы (Producer–Consumer)
 
 ```go
-result := Pipeline([]int{1, 2, 3, 4, 5},
-    func(x int) int { return x * 2 },
-    func(x int) int { return x + 3 },
-    func(x int) int { return x * x },
+package main
+
+import "fmt"
+
+func main() {
+    ch := make(chan int)
+
+    go func() {
+        for i := 1; i <= 5; i++ {
+            ch <- i
+        }
+        close(ch)
+    }()
+
+    for val := range ch {
+        fmt.Println("Получено:", val)
+    }
+}
+```
+
+**Описание:**
+Одна горутина отправляет данные в канал, другая — принимает их.
+
+### Пример 3. Worker Pool
+
+```go
+package main
+
+import (
+    "fmt"
+    "sync"
 )
-fmt.Println(result) // [16 25 36 49 64]
+
+func worker(id int, jobs <-chan int, results chan<- int, wg *sync.WaitGroup) {
+    defer wg.Done()
+    for job := range jobs {
+        results <- job * job
+    }
+}
+
+func main() {
+    jobs := make(chan int, 5)
+    results := make(chan int, 5)
+
+    var wg sync.WaitGroup
+
+    for w := 1; w <= 3; w++ {
+        wg.Add(1)
+        go worker(w, jobs, results, &wg)
+    }
+
+    for i := 1; i <= 5; i++ {
+        jobs <- i
+    }
+    close(jobs)
+
+    wg.Wait()
+    close(results)
+
+    for res := range results {
+        fmt.Println("Результат:", res)
+    }
+}
+```
+
+### Пример 4. Pipeline
+
+```go
+package main
+
+import "fmt"
+
+func stage1(nums []int) []int {
+    out := []int{}
+    for _, n := range nums {
+        out = append(out, n*2)
+    }
+    return out
+}
+
+func stage2(nums []int) []int {
+    out := []int{}
+    for _, n := range nums {
+        out = append(out, n+1)
+    }
+    return out
+}
+
+func main() {
+    input := []int{1, 2, 3, 4, 5}
+    result := stage2(stage1(input))
+    fmt.Println(result)
+}
+```
+
+### Пример 5. Fan-Out / Fan-In
+
+```go
+package main
+
+import "fmt"
+
+func square(ch <-chan int, out chan<- int) {
+    for n := range ch {
+        out <- n * n
+    }
+}
+
+func main() {
+    input := make(chan int)
+    output := make(chan int)
+
+    for i := 0; i < 3; i++ {
+        go square(input, output)
+    }
+
+    go func() {
+        for i := 1; i <= 5; i++ {
+            input <- i
+        }
+        close(input)
+    }()
+
+    for i := 1; i <= 5; i++ {
+        fmt.Println(<-output)
+    }
+}
 ```
 
 ## Результаты выполнения
