@@ -2,11 +2,11 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 
-const inter = Inter({ subsets: ['latin'] })
+const inter = Inter({ subsets: ['latin', 'cyrillic'] })
 
 export const metadata: Metadata = {
-  title: 'Мое портфолио',
-  description: 'Сайт-портфолио разработчика',
+  title: 'Иван Иванов | Веб-разработчик',
+  description: 'Портфолио фронтенд-разработчика',
 }
 
 export default function RootLayout({
@@ -17,26 +17,24 @@ export default function RootLayout({
   return (
     <html lang="ru">
       <body className={inter.className}>
-
-        <header className="bg-gray-800 text-white p-4">
-          <nav className="container mx-auto">
-            <ul className="flex gap-6">
-              <li><a href="/">Главная</a></li>
-              <li><a href="/about">Обо мне</a></li>
-              <li><a href="/blog">Блог</a></li>
-              <li><a href="/projects">Проекты</a></li>
+        <header className="bg-gray-900 text-white sticky top-0 z-50">
+          <nav className="container mx-auto px-6 py-5">
+            <ul className="flex gap-8 justify-center text-lg">
+              <li><a href="/" className="hover:text-blue-400 transition">Главная</a></li>
+              <li><a href="/about" className="hover:text-blue-400 transition">Обо мне</a></li>
+              <li><a href="/blog" className="hover:text-blue-400 transition">Блог</a></li>
+              <li><a href="/projects" className="hover:text-blue-400 transition">Проекты</a></li>
             </ul>
           </nav>
         </header>
-
-        <main className="container mx-auto p-4">
+        
+        <main className="min-h-screen">
           {children}
         </main>
 
-        <footer className="bg-gray-800 text-white p-4 text-center">
-          <p>© Мое портфолио</p>
+        <footer className="bg-gray-900 text-white py-8 text-center">
+          <p>© 2026 Иван Иванов. Все права защищены.</p>
         </footer>
-
       </body>
     </html>
   )
