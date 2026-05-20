@@ -1,3 +1,0 @@
-skips: ['B101']  # assert в тестах (если нужно)
-severity: MEDIUM
-confidence: MEDIUM
