@@ -1,0 +1,27 @@
+# Frontend
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.env*.local
+
+# Backend
+backend/venv/
+backend/__pycache__/
+backend/*.pyc
+backend/.pytest_cache/
+backend/.coverage
+backend/coverage.xml
+
+# Terraform
+infrastructure/terraform/.terraform/
+infrastructure/terraform/*.tfstate*
+infrastructure/terraform/*.tfplan
+
+# Env
+.env
+.env.local
+.env.production
+
+# Misc
+.DS_Store
+*.log
